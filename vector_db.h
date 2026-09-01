@@ -6,19 +6,29 @@ using namespace std;
 // Maps string ID -> index in ids/embeddings
 extern unordered_map<string, int> id_to_index;
 
-// Stores IDs separately
+// 
 extern vector<string> ids;
 
-// Stores all vectors
-extern vector<vector<float>> embeddings;
+// Stores all vector values in one contiguous array
+extern vector<float> embeddings;
 
-void insert(string str, vector<float> v);
+extern int dimension;
+
+void insert(const string& id, const vector<float>& v);
+
+// function to generate vector of some dimension
+vector<float> generateVector(int dimension);
+
+void generate_random_database(int n, int dim);
 
 float find_cosine_similarity(
     const vector<float>& a,
     const vector<float>& b
 );
 
-vector<pair<string, float>> search(vector<float> v, int k);
+vector<pair<string, float>> search(
+    const vector<float>& v,
+    int k
+);
 
 int size();

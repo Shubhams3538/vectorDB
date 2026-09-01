@@ -5,48 +5,46 @@
 
 using namespace std;
 
-
-// function to generate vector of some dimension
-vector<float> generateVector(int dimension){
-    static random_device rd;
-    static mt19937 gen(rd());
-    static uniform_real_distribution<float>dis(0.0f,1.0f);
-
-    vector<float>v(dimension);
-
-    for(int i = 0;i<dimension;i++){
-        v[i] = dis(gen);
-    }
-    return v;
-}
-
-
-
 int main() {
 
-    cout<<"Enter how many random vectors you want : "<<endl;
+    cout << "Enter how many random vectors you want : " << endl;
+
     int n;
-    cin>>n;
+    cin >> n;
 
+    int dim;
 
-    for(int i = 0;i<n;i++){
-        vector<float> temp = generateVector(3);
-        insert(to_string(i) , temp);
-    }
+    cout << "Enter dimensions of each vector" << endl;
+    cin >> dim;
 
-    vector<float> query = {1, 2, 3};
+    int k;
+
+    cout << "Enter how many closest vectors you want : " << endl;
+    cin >> k;
+
+    generate_random_database(n, dim);
+
+    vector<float> query = generateVector(dim);
+
+    search(query, k);
 
     auto start = chrono::high_resolution_clock::now();
 
-    auto result = search(query, 2);
+    auto result = search(query, k);
 
     auto end = chrono::high_resolution_clock::now();
 
-    double time = chrono::duration<double, milli>(end - start).count();
+    double time =
+        chrono::duration<double, milli>(end - start).count();
 
+    cout << "Vectors: " << n << endl;
+    cout << "Dimension: " << dim << endl;
+    cout << "K: " << k << endl;
     cout << "Search time: " << time << " ms\n";
 
-    for (auto &x : result) {
+    for (auto& x : result) {
         cout << x.first << " " << x.second << "\n";
     }
+
+    return 0;
 }

@@ -2,19 +2,68 @@
 
 unordered_map<string, int> id_to_index;
 vector<string> ids;
-vector<vector<float>> embeddings;
+vector<float> embeddings;
 
-void insert(string str, vector<float> v) {
+int dimension = 0;
 
-    if (id_to_index.find(str) == id_to_index.end()) {
 
-        int index = embeddings.size();
+// function to generate vector of some dimension
+vector<float> generateVector(int dimension) {
+    static random_device rd;
+    static mt19937 gen(rd());
+    static uniform_real_distribution<float> dis(0.0f, 1.0f);
 
-        ids.push_back(str);
-        embeddings.push_back(v);
-        id_to_index[str] = index;
+    vector<float> v(dimension);
+
+    for (int i = 0; i < dimension; i++) {
+        v[i] = dis(gen);
+    }
+
+    return v;
+}
+
+
+void insert(const string& id, const vector<float>& v) {
+
+    if (id_to_index.find(id) != id_to_index.end()) {
+        return;
+    }
+
+    if (dimension == 0) {
+        dimension = v.size();
+    }
+
+    if (v.size() != dimension) {
+        return;
+    }
+
+    int index = ids.size();
+
+    id_to_index[id] = index;
+    ids.push_back(id);
+
+    for (float x : v) {
+        embeddings.push_back(x);
     }
 }
+
+
+void generate_random_database(int n, int dim) {
+
+    dimension = dim;
+
+    id_to_index.reserve(n);
+    ids.reserve(n);
+    embeddings.reserve(static_cast<size_t>(n) * dim);
+
+    for (int i = 0; i < n; i++) {
+        string id = to_string(i);
+        vector<float> v = generateVector(dim);
+
+        insert(id, v);
+    }
+}
+
 
 float find_cosine_similarity(
     const vector<float>& a,
@@ -37,32 +86,54 @@ float find_cosine_similarity(
 
     float deno = num1 * num2;
 
+    if (deno == 0.0f) {
+        return 0.0f;
+    }
+
     return numerator / deno;
 }
 
-vector<pair<string, float>> search(vector<float> v, int k) {
 
+vector<pair<string, float>> search(
+    const vector<float>& v,
+    int k
+) {
     vector<pair<string, float>> ans;
 
-    // Min heap:
+    // min heap to find top k closest vectors
     priority_queue<
         pair<float, string>,
         vector<pair<float, string>>,
         greater<pair<float, string>>
     > pq;
 
-    // We do NOT iterate through the unordered_map.
-    for (int i = 0; i < embeddings.size(); i++) {
+    for (int i = 0; i < ids.size(); i++) {
 
-        // Reference instead of copying the vector
-        const vector<float>& temp = embeddings[i];
+        int start = i * dimension;
 
-        float val = find_cosine_similarity(v, temp);
+        float numerator = 0.0f;
+        float num1 = 0.0f;
+        float num2 = 0.0f;
+
+        for (int j = 0; j < dimension; j++) {
+            float current = embeddings[start + j];
+
+            numerator += v[j] * current;
+            num1 += v[j] * v[j];
+            num2 += current * current;
+        }
+
+        float deno = sqrt(num1) * sqrt(num2);
+
+        float val = 0.0f;
+
+        if (deno != 0.0f) {
+            val = numerator / deno;
+        }
 
         if (pq.size() < k) {
             pq.push({val, ids[i]});
         }
-
         else if (pq.top().first < val) {
             pq.pop();
             pq.push({val, ids[i]});
@@ -83,6 +154,7 @@ vector<pair<string, float>> search(vector<float> v, int k) {
     return ans;
 }
 
+
 int size() {
-    return embeddings.size();
+    return ids.size();
 }
