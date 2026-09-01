@@ -54,7 +54,7 @@ void generate_random_database(int n, int dim) {
 
     id_to_index.reserve(n);
     ids.reserve(n);
-    embeddings.reserve(static_cast<size_t>(n) * dim);
+    embeddings.reserve(1LL * n * dim);
 
     for (int i = 0; i < n; i++) {
         string id = to_string(i);
@@ -111,25 +111,13 @@ vector<pair<string, float>> search(
 
         int start = i * dimension;
 
-        float numerator = 0.0f;
-        float num1 = 0.0f;
-        float num2 = 0.0f;
+        vector<float> temp;
 
         for (int j = 0; j < dimension; j++) {
-            float current = embeddings[start + j];
-
-            numerator += v[j] * current;
-            num1 += v[j] * v[j];
-            num2 += current * current;
+            temp.push_back(embeddings[start + j]);
         }
 
-        float deno = sqrt(num1) * sqrt(num2);
-
-        float val = 0.0f;
-
-        if (deno != 0.0f) {
-            val = numerator / deno;
-        }
+        float val = find_cosine_similarity(v, temp);
 
         if (pq.size() < k) {
             pq.push({val, ids[i]});
