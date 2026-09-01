@@ -31,7 +31,7 @@ int main() {
 
     for(int i = 0;i<n;i++){
         vector<float> temp = generateVector(3);
-        db.insert({to_string(i),temp});
+        insert(to_string(i) , temp);
     }
 
     vector<float> query = {1, 2, 3};
