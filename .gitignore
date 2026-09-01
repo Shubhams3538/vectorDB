@@ -1,0 +1,11 @@
+# CMake build files
+build/
+
+# Compiled executables
+app
+benchmark
+test
+*.out
+
+# macOS
+.DS_Store
