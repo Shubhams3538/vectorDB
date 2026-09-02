@@ -8,9 +8,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(app
    main.cpp
    vector_db.cpp
+   kmeans.cpp
 )
 
 add_executable(benchmark
     benchmark.cpp
     vector_db.cpp
+    kmeans.cpp
 )

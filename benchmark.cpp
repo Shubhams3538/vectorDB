@@ -22,7 +22,14 @@ int main() {
     cout << "Enter how many closest vectors you want : " << endl;
     cin >> k;
 
+    int num_clusters;
+
+    cout << "Enter how many clusters you want : " << endl;
+    cin >> num_clusters;
+
     generate_random_database(n, dim);
+
+    build_ivf(num_clusters);
 
     vector<float> query = generateVector(dim);
 

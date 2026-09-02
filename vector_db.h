@@ -21,6 +21,8 @@ vector<float> generateVector(int dimension);
 
 void generate_random_database(int n, int dim);
 
+void build_ivf(int num_clusters);
+
 float find_cosine_similarity(
     const vector<float>& a,
     const vector<float>& b

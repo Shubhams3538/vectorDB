@@ -1,11 +1,14 @@
 #include "vector_db.h"
+#include "kmeans.h"
 
 unordered_map<string, int> id_to_index;
 vector<string> ids;
 vector<float> embeddings;
+vector<float>centroids;
+vector<vector<int>>inverted_lists;
 
 int dimension = 0;
-
+int num_vectors = 0;
 
 // function to generate vector of some dimension
 vector<float> generateVector(int dimension) {
@@ -51,6 +54,7 @@ void insert(const string& id, const vector<float>& v) {
 void generate_random_database(int n, int dim) {
 
     dimension = dim;
+    num_vectors = n;
 
     id_to_index.reserve(n);
     ids.reserve(n);
@@ -64,6 +68,16 @@ void generate_random_database(int n, int dim) {
     }
 }
 
+void build_ivf(int num_clusters){
+    kmeans(
+        embeddings,
+        num_vectors,
+        dimension,
+        num_clusters,
+        centroids,
+        inverted_lists
+    );
+}
 
 float find_cosine_similarity(
     const vector<float>& a,
@@ -100,6 +114,10 @@ vector<pair<string, float>> search(
 ) {
     vector<pair<string, float>> ans;
 
+    if (centroids.empty() || inverted_lists.empty()) {
+        return ans;
+    }
+
     // min heap to find top k closest vectors
     priority_queue<
         pair<float, string>,
@@ -116,7 +134,35 @@ vector<pair<string, float>> search(
 
     query_norm = sqrt(query_norm);
 
-    for (int i = 0; i < ids.size(); i++) {
+    int closest_cluster = 0;
+    float closest_centroid_distance = 0.0f;
+
+    for (int d = 0; d < dimension; d++) {
+        float difference = v[d] - centroids[d];
+        closest_centroid_distance += difference * difference;
+    }
+
+    for (int cluster = 1;
+         cluster < inverted_lists.size();
+         cluster++) {
+
+        float centroid_distance = 0.0f;
+
+        for (int d = 0; d < dimension; d++) {
+            float difference =
+                v[d] - centroids[cluster * dimension + d];
+
+            centroid_distance += difference * difference;
+        }
+
+        if (centroid_distance < closest_centroid_distance) {
+            closest_centroid_distance = centroid_distance;
+            closest_cluster = cluster;
+        }
+    }
+
+    // Search only vectors that belong to the query's closest cluster.
+    for (int i : inverted_lists[closest_cluster]) {
 
         int start = i * dimension;
 
