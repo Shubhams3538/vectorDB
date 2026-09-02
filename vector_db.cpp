@@ -107,17 +107,39 @@ vector<pair<string, float>> search(
         greater<pair<float, string>>
     > pq;
 
+    float query_norm = 0.0f;
+
+    // calculating det(query vector) just once to save number of computation
+    for (int i = 0; i < dimension; i++) {
+        query_norm += v[i] * v[i];
+    }
+
+    query_norm = sqrt(query_norm);
+
     for (int i = 0; i < ids.size(); i++) {
 
         int start = i * dimension;
 
-        vector<float> temp;
+        float numerator = 0.0f;
+        float vector_norm = 0.0f;
 
         for (int j = 0; j < dimension; j++) {
-            temp.push_back(embeddings[start + j]);
+
+            float current = embeddings[start + j];
+
+            numerator += v[j] * current;
+            vector_norm += current * current;
         }
 
-        float val = find_cosine_similarity(v, temp);
+        vector_norm = sqrt(vector_norm);
+
+        float deno = query_norm * vector_norm;
+
+        float val = 0.0f;
+
+        if (deno != 0.0f) {
+            val = numerator / deno;
+        }
 
         if (pq.size() < k) {
             pq.push({val, ids[i]});
