@@ -39,9 +39,14 @@ int main() {
         return 1;
     }
 
+    auto start = chrono::high_resolution_clock::now();
     generate_random_database(n, dim);
-
     build_ivf(num_clusters);
+
+    auto end = chrono::high_resolution_clock::now();
+    double time = chrono::duration<double, milli>(end - start).count();
+
+    cout << "Time taken to create Inverted File System : " << time << " ms\n";
 
     cout<<"1. Choose custom vector"<<endl;
     cout<<"2. Generate random vector"<<endl;
@@ -71,14 +76,13 @@ int main() {
     // Warm up the search path before measuring steady-state latency.
     search(query, k);
 
-    auto start = chrono::high_resolution_clock::now();
+    start = chrono::high_resolution_clock::now();
 
     auto result = search(query, k);
 
-    auto end = chrono::high_resolution_clock::now();
+    end = chrono::high_resolution_clock::now();
 
-    double time =
-        chrono::duration<double, milli>(end - start).count();
+    time = chrono::duration<double, milli>(end - start).count();
 
     cout << "Vectors: " << n << endl;
     cout << "Dimension: " << dim << endl;
