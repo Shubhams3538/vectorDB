@@ -31,6 +31,8 @@ int num_vectors,int dimensions , int num_clusters, vector<float>&centroids,  vec
             // finding eucladian distance between the current vector and remaining clusters and picking the closest
             // cluster to this vector
 
+            // the next step is to parallelize the whole k means code we will start from here
+
             for(int cluster = 1; cluster < num_clusters;cluster++){
                 float temp_dist = 0;
                 for(int d = 0;d<dimensions;d++){
