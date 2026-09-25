@@ -38,13 +38,20 @@ int main() {
         cerr << "Number of clusters must be between 1 and " << n << ".\n";
         return 1;
     }
-
+    // calculate the time to generate random db
     auto start = chrono::high_resolution_clock::now();
     generate_random_database(n, dim);
-    build_ivf(num_clusters);
-
     auto end = chrono::high_resolution_clock::now();
     double time = chrono::duration<double, milli>(end - start).count();
+
+    cout << "Time taken to generate random DB: " << time << " ms\n";
+
+    // calculate the time create clusters and final db creation
+    start = chrono::high_resolution_clock::now();
+    build_ivf(num_clusters);
+
+    end = chrono::high_resolution_clock::now();
+    time = chrono::duration<double, milli>(end - start).count();
 
     cout << "Time taken to create Inverted File System : " << time << " ms\n";
 
