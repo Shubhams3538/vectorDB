@@ -276,10 +276,44 @@ The IVF query is approximately **20.8x faster**, or **95.2% less query time**.
 
 ### Current Limits
 
-- K-means index building is single-threaded and expensive at large data sizes.
-- Index-build time is excluded from the query benchmark above and has not yet been measured separately.
+- The vector-to-centroid assignment phase is parallelized, but centroid accumulation and the final assignment pass are still serial.
+- Database generation and IVF index-build time are now measured separately.
 - Recall has not yet been compared with exact search.
-- A 10M-vector, 20-cluster build was interrupted before completion.
+
+---
+
+# Approach 6 — Parallel Vector-to-Centroid Assignment
+
+The most expensive loop in each K-means iteration assigns every vector to its closest centroid. This loop is now divided into non-overlapping vector ranges and executed by up to 10 worker threads.
+
+```text
+embeddings and centroids -> shared read-only
+assignments              -> shared, disjoint index writes
+each worker              -> one non-overlapping vector range
+join all workers         -> continue to centroid recomputation
+```
+
+No mutex is required for `assignments` because each vector index is owned by exactly one worker. All workers are joined before centroids are recomputed.
+
+### Correctness Validation
+
+The serial and parallel implementations were run against the same embeddings and centroids during all 10 K-means iterations. Their complete assignment arrays matched exactly for:
+
+- 7 vectors, covering fewer vectors than workers.
+- 10,003 vectors, covering an uneven partition.
+- 100,000 vectors, dimension 3, and 10 clusters.
+
+### Preliminary Assignment Timing
+
+For 100,000 vectors, dimension 3, 10 clusters, and 10 K-means iterations:
+
+```text
+Serial assignment total   -> 163.784 ms
+Parallel assignment total ->  35.778 ms
+Observed speedup           ->   4.58x
+```
+
+This is a preliminary, non-Release measurement of the assignment phase only. The current validation path deliberately executes both implementations, so its total IVF-build time is not a production performance result.
 
 ---
 
@@ -296,7 +330,7 @@ Approaches 1-4 are exact brute-force search.
 Approach 5 is approximate IVF search.
 ```
 
-We have improved the exact baseline and built the first approximate index.
+We have improved the exact baseline, built the first approximate index, and parallelized its vector-assignment phase.
 
 ---
 
@@ -306,22 +340,27 @@ IVF makes query search much faster by avoiding a full database scan, but the cur
 
 ```text
 K-means build time is high at large N.
+Centroid accumulation and final assignment are still serial.
 Recall has not been measured yet.
 Only one cluster is searched per query.
 ```
 
 # Next Stage
 
-The next stage is measuring and improving the IVF index build.
+The next stage is parallelizing centroid accumulation without introducing shared-write data races.
 
 The same process continues:
 
 ```text
-Measure K-means build time separately from query time
+Parallel vector assignment with disjoint output ranges [done]
     ↓
-Learn thread partitioning, race conditions, and reduction
+Give each worker private centroid sums and counts
     ↓
-Parallelize K-means training
+Reduce worker-local results in a fixed order
+    ↓
+Parallelize the final assignment pass
+    ↓
+Run controlled Release benchmarks
     ↓
 Measure IVF recall against exact search
 ```
