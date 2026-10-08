@@ -3,7 +3,7 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-void kmeans(
+bool kmeans(
     const vector<float>&embeddings,
     int num_vectors,
     int dimension,

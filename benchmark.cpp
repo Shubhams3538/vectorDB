@@ -48,7 +48,10 @@ int main() {
 
     // calculate the time create clusters and final db creation
     start = chrono::high_resolution_clock::now();
-    build_ivf(num_clusters);
+    if (!build_ivf(num_clusters)) {
+        cerr << "IVF build failed; stopping benchmark before search.\n";
+        return 1;
+    }
 
     end = chrono::high_resolution_clock::now();
     time = chrono::duration<double, milli>(end - start).count();

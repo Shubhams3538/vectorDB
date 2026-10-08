@@ -68,8 +68,8 @@ void generate_random_database(int n, int dim) {
     }
 }
 
-void build_ivf(int num_clusters){
-    kmeans(
+bool build_ivf(int num_clusters){
+    return kmeans(
         embeddings,
         num_vectors,
         dimension,
