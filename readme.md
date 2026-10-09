@@ -276,7 +276,7 @@ The IVF query is approximately **20.8x faster**, or **95.2% less query time**.
 
 ### Current Limits
 
-- Vector-to-centroid assignment and centroid accumulation are now parallelized; centroid division and the final assignment pass remain serial.
+- Vector-to-centroid assignment, centroid accumulation, and the final assignment pass are now parallelized; centroid division and inverted-list construction remain serial.
 - Database generation and IVF index-build time are now measured separately.
 - Recall has not yet been compared with exact search.
 
@@ -313,7 +313,7 @@ Parallel assignment total ->  35.778 ms
 Observed speedup           ->   4.58x
 ```
 
-This is a preliminary, non-Release measurement of the assignment phase only. The current validation path deliberately executes both implementations, so its total IVF-build time is not a production performance result.
+This is a preliminary, non-Release measurement of the assignment phase only. The validation path at the time deliberately executed both implementations, so its total IVF-build time was not a production performance result. Comparison instrumentation has since been removed as documented below.
 
 ---
 
@@ -321,7 +321,7 @@ This is a preliminary, non-Release measurement of the assignment phase only. The
 
 Completed and checked on October 8, 2026. Each worker processes a disjoint range of vectors and updates its own centroid sums and cluster counts. Embeddings and assignments are shared read-only. After all workers join, their buffers are merged serially in fixed worker order; centroid division remains serial.
 
-The serial helper and temporary execution timers are retained for comparison. Each K-means iteration runs both accumulation helpers on identical embeddings and assignments with separate zero-initialized output buffers. The parallel outputs are used to update centroids.
+During validation, the serial helper and temporary execution timers were retained for comparison. Each K-means iteration ran both accumulation helpers on identical embeddings and assignments with separate zero-initialized output buffers. The parallel outputs were used to update centroids. The cleanup below removes this duplicate execution.
 
 ### Validation
 
@@ -430,7 +430,7 @@ Large-run input:
 printf '10000000\n3\n5\n5\n2\n' | ./build/benchmark
 ```
 
-The large successful repeat supports the float-accumulation diagnosis, but it does not reproduce the original random dataset. The temporary comparison still executes both implementations; the total build time remains instrumented rather than production performance. Tiny-run threading overhead remains higher than serial work.
+The large successful repeat supports the float-accumulation diagnosis, but it does not reproduce the original random dataset. That run executed both implementations; its total build time includes comparison instrumentation. Tiny-run threading overhead was higher than serial work.
 
 ### User Benchmark — 10 Million Vectors, 10 Clusters (October 8, 2026)
 
@@ -456,6 +456,41 @@ The goal remains 1 billion vectors in under 100 ms. A simple linear projection a
 Search scans only the closest cluster. Balanced clusters would contain about 1 million vectors each at 10 million vectors / 10 clusters, versus 100 million each at 1 billion / 10 clusters; actual cluster populations were not logged. More clusters could reduce candidates, but add centroid-selection and K-means build work, and single-cluster recall must be measured before treating speed as success. With approximately 1,000 balanced clusters at 1 billion vectors, average cluster population would remain around 1 million; this does not guarantee the measured 34 ms latency.
 
 Raw 3D float embeddings alone need 12 GB at 1 billion vectors, before IDs, the ID map, inverted lists, assignments, and other buffers. Existing `int` flattened offsets such as `int start = i * dimension` in search also overflow for sufficiently large indexes at dimension 3; address index widths before scaling to that size. Higher-dimensional vector workloads require separate measurements.
+
+### Parallel-Path Cleanup — October 8, 2026
+
+Removed both single-threaded comparison helpers, duplicate assignment/sum/count buffers, serial-versus-parallel validation loops, all phase-comparison timers, and their speedup output. Each iteration now runs only parallel assignment and parallel accumulation. Double sums, non-finite-sum rejection, and boolean build-failure reporting remain. The necessary serial buffer merge, centroid division, final assignment, and inverted-list construction are unchanged.
+
+Validation:
+
+- Both targets built and `git diff --check` passed.
+- A temporary before/after check produced identical final centroids and inverted lists for deterministic datasets of 1, 7, and 10,003 vectors. Every vector appeared exactly once in the lists.
+- Invalid input and a NaN sum still returned failure.
+- An end-to-end run completed with 100,000 random vectors, dimension 3, 10 clusters, and K=5 using the existing non-Release build.
+
+```text
+Database generation -> 62.1 ms
+IVF build           -> 60.262 ms
+Search              -> 0.301 ms (one random query after warm-up)
+```
+
+Reproduce the configuration with `printf '100000\n3\n5\n10\n2\n' | ./build/benchmark`. This is a single preliminary run; no 10-million-vector benchmark was repeated for this cleanup. The benchmark retains its existing database-generation, complete IVF-build, and search timers. Historical serial/parallel comparison results above remain as evidence, but no comparison code runs in the current implementation.
+
+### Parallel Final Assignment — October 8, 2026
+
+The final reassignment after the tenth centroid update now calls the existing `multi_threaded_cluster_assignment()` helper. Its workers write disjoint assignment ranges and join before the unchanged serial inverted-list fill. The old final assignment loop is commented out and does not execute; it can be deleted during cleanup.
+
+Validation: both targets built, whitespace checks passed, and a temporary deterministic before/after check produced identical centroids and inverted lists for 1, 7, and 10,003 vectors. Every vector appeared exactly once. Invalid input and non-finite sums still reported failure.
+
+An end-to-end benchmark with 100,000 random vectors, dimension 3, 10 clusters, K=5, and a random query completed in the existing non-Release build:
+
+```text
+Database generation -> 34.817 ms
+IVF build           -> 48.714 ms
+Search              -> 0.380 ms
+```
+
+This single run uses newly generated random data; it is not a controlled speedup comparison with the previous cleanup run. Recall remains unmeasured.
 
 ### Documentation Workflow
 
@@ -486,15 +521,15 @@ IVF makes query search much faster by avoiding a full database scan, but the cur
 
 ```text
 K-means build time is high at large N.
-Centroid division, final assignment, and inverted-list construction are still serial.
-Temporary serial/parallel comparison instrumentation remains enabled.
+Buffer merging, centroid division, and inverted-list construction are still serial.
+Controlled Release benchmarks and query recall evaluation remain pending.
 Recall has not been measured yet.
 Only one cluster is searched per query.
 ```
 
 # Next Stage
 
-The accumulation precision and build-failure reporting fixes are validated. The next implementation step is parallelizing the final assignment pass. Temporary serial/parallel timing and validation remain in place until the comparison work is complete; remove them before production performance measurements.
+The final assignment pass is parallelized and validated. The next step is a controlled Release benchmark of the current implementation, followed by recall evaluation against exact search.
 
 The same process continues:
 
@@ -505,7 +540,7 @@ Give each worker private centroid sums and counts [done]
     ↓
 Reduce worker-local results in a fixed order [done]
     ↓
-Parallelize the final assignment pass
+Parallelize the final assignment pass [done]
     ↓
 Run controlled Release benchmarks
     ↓
