@@ -162,35 +162,14 @@ int num_vectors,int dimensions , int num_clusters, vector<float>&centroids,  vec
 
     // The final centroid update changes centroid positions, so assign every
     // vector once more before building the final inverted lists.
-    multi_threaded_cluster_assignment(num_vectors,dimensions,embeddings,centroids,assignments,num_clusters);
-    // for(int vector_ind = 0;vector_ind < num_vectors;vector_ind++){
-    //     int closest_cluster = 0;
-    //     float closest_dist = 0.0f;
-
-    //     for(int d = 0;d < dimensions;d++){
-    //         float diff = embeddings[vector_ind * dimensions + d] - centroids[d];
-    //         closest_dist += diff * diff;
-    //     }
-
-    //     for(int cluster = 1; cluster < num_clusters;cluster++){
-    //         float temp_dist = 0.0f;
-
-    //         for(int d = 0;d<dimensions;d++){
-    //             float diff =
-    //                 embeddings[vector_ind * dimensions + d] -
-    //                 centroids[cluster * dimensions + d];
-
-    //             temp_dist += diff * diff;
-    //         }
-
-    //         if(temp_dist < closest_dist){
-    //             closest_dist = temp_dist;
-    //             closest_cluster = cluster;
-    //         }
-    //     }
-
-    //     assignments[vector_ind] = closest_cluster;
-    // }
+    auto final_assignment_start = chrono::steady_clock::now();
+    multi_threaded_cluster_assignment(
+        num_vectors, dimensions, embeddings, centroids, assignments, num_clusters);
+    auto final_assignment_end = chrono::steady_clock::now();
+    double final_assignment_time = chrono::duration<double, milli>(
+        final_assignment_end - final_assignment_start).count();
+    cout << "Parallel final cluster-assignment time: "
+         << final_assignment_time << " ms\n";
 
       // centeroid -> [indexes of each vector in the particular cluster]
       for(int i = 0;i<num_vectors;i++){

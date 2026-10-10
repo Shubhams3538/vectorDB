@@ -211,6 +211,62 @@ vector<pair<string, float>> search(
 }
 
 
+vector<pair<string, float>> exact_search(
+    const vector<float>& v,
+    int k
+) {
+    vector<pair<string, float>> ans;
+    if (k <= 0 || dimension <= 0 || v.size() != size_t(dimension) || ids.empty()) {
+        return ans;
+    }
+
+    priority_queue<
+        pair<float, string>,
+        vector<pair<float, string>>,
+        greater<pair<float, string>>
+    > pq;
+
+    float query_norm = 0.0f;
+    for (int d = 0; d < dimension; d++) {
+        query_norm += v[d] * v[d];
+    }
+    query_norm = sqrt(query_norm);
+
+    // Scan every stored vector; no IVF index is needed.
+    for (size_t i = 0; i < ids.size(); i++) {
+        size_t start = i * size_t(dimension);
+        float numerator = 0.0f;
+        float vector_norm = 0.0f;
+        for (int d = 0; d < dimension; d++) {
+            float current = embeddings[start + d];
+            numerator += v[d] * current;
+            vector_norm += current * current;
+        }
+        vector_norm = sqrt(vector_norm);
+
+        float deno = query_norm * vector_norm;
+        float val = 0.0f;
+        if (deno != 0.0f) {
+            val = numerator / deno;
+        }
+
+        if (pq.size() < size_t(k)) {
+            pq.push({val, ids[i]});
+        }
+        else if (pq.top().first < val) {
+            pq.pop();
+            pq.push({val, ids[i]});
+        }
+    }
+
+    while (!pq.empty()) {
+        ans.push_back({pq.top().second, pq.top().first});
+        pq.pop();
+    }
+    reverse(ans.begin(), ans.end());
+    return ans;
+}
+
 int size() {
     return ids.size();
 }

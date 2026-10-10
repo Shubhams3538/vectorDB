@@ -492,6 +492,139 @@ Search              -> 0.380 ms
 
 This single run uses newly generated random data; it is not a controlled speedup comparison with the previous cleanup run. Recall remains unmeasured.
 
+### Final Assignment Timer — October 8, 2026
+
+User-reported run before this timer change: 10,000,000 vectors, dimension 3, 10 clusters, K=5, random query; database generation 4598.66 ms, complete IVF build 4071.79 ms, and search 31.143 ms. Build mode was not independently verified for that run. It measured the complete build, not the final reassignment step.
+
+Added one `steady_clock` interval around only the final `multi_threaded_cluster_assignment()` call after the 10 iterations. Output is `Parallel final cluster-assignment time`. This includes thread creation, distance calculations, assignment writes, and joins, and excludes the 10 training iterations and inverted-list construction. The overall IVF-build timer was initially removed, then restored following clarification: the requested output includes the step time first, complete IVF-build time afterward, and search time at the end. Existing database-generation timing remains.
+
+Both targets built and whitespace checks passed. An end-to-end check in the existing non-Release build with 100,000 random vectors, dimension 3, 10 clusters, K=5, and a random query printed:
+
+```text
+Database generation               -> 55.926 ms
+Parallel final cluster assignment -> 3.345 ms
+Search                            -> 0.261 ms
+```
+
+The initial run omitted overall IVF timing. After restoring it, another end-to-end run with the same configuration and fresh random data printed the requested order:
+
+```text
+Database generation               -> 55.894 ms
+Parallel final cluster assignment -> 3.508 ms
+Complete IVF build                -> 54.729 ms
+Search                            -> 0.279 ms
+```
+
+The complete build timer surrounds `build_ivf()` and includes the final assignment step; these durations must not be added together. Build and whitespace checks passed. These are single preliminary measurements; no large workload was rerun for this timer change. Next, measure this step in a controlled Release build before evaluating recall.
+
+### User Runs With Step Timing — October 8, 2026
+
+User-reported runs with 10,000,000 random vectors, dimension 3, 10 clusters, K=5, and random queries:
+
+```text
+First run, before rebuilding with the restored overall timer:
+Database generation               -> 4587.49 ms
+Parallel final cluster assignment -> 290.767 ms
+Search                            -> 26.525 ms
+Overall IVF build time            -> not printed
+
+Second run, after cmake --build build:
+Database generation               -> 4527.9 ms
+Parallel final cluster assignment -> 293.588 ms
+Complete IVF build                -> 3918.82 ms
+Search                            -> 33.761 ms
+```
+
+The current `build/CMakeCache.txt` has an unset build type and uses `/opt/homebrew/bin/g++-15`. These reported runs were not repeated by the agent. The second run confirms the requested timing output order. Random datasets, random queries, and runtime conditions vary, so the different search times do not establish a regression. Recall remains unmeasured.
+
+Next: create a separate Release build with the same compiler, run the same configuration, and record its build/step/search timings before evaluating recall. Retain the existing build for reference.
+
+### Release Benchmark — October 8, 2026
+
+User configured a separate `build-release` folder with `CMAKE_BUILD_TYPE=Release` and `/opt/homebrew/bin/g++-15`, then reported this successful benchmark for 10,000,000 random vectors, dimension 3, 10 clusters, K=5, and a random query:
+
+```text
+Database generation               -> 1969.1 ms
+Parallel final cluster assignment -> 41.407 ms
+Complete IVF build                -> 551.724 ms
+Search                            -> 5.296 ms
+```
+
+Compared with the user's preceding non-Release run using the same input configuration:
+
+```text
+Final assignment: 293.588 / 41.407 -> about 7.09x faster
+Complete build:  3918.82 / 551.724 -> about 7.10x faster
+Search:          33.761 / 5.296   -> about 6.37x faster
+```
+
+The Release cache was checked locally. The benchmark output is user-reported and was not repeated by the agent. Random datasets and queries differ between runs, so these ratios are observed comparisons rather than controlled speedup measurements. Each search duration measures one query after warm-up; recall and latency distributions remain unmeasured. The next step is validating IVF recall against exact cosine search using identical data and queries.
+
+### Exact Search Baseline — October 8, 2026
+
+Added `exact_search(query, k)` to `vector_db.cpp` and declared it in `vector_db.h`. It scans all stored vectors without an IVF index, uses the same float cosine scoring and bounded min-heap approach as IVF search, and returns `(ID, score)` pairs in descending score order. Query norm is calculated once. Empty databases, invalid dimensions, and nonpositive K return an empty result; K larger than the database returns all stored vectors. Zero norms receive score zero, matching existing search. Flattened offsets use `size_t` in the new function.
+
+Equal-score candidates use the existing search's strict score replacement rule; different equally valid IDs may be retained when scan orders differ. Future ID-based recall evaluation must account for ties, especially when float scores round to 1.
+
+Both existing and Release builds passed, as did whitespace checks. A temporary standalone check passed known rankings, zero norms, invalid queries/K, oversized K, and 120 comparisons of top-K scores against an independently full-sorted cosine reference over 200 deterministic signed vectors. No benchmark or recall measurement was added or run at this step.
+
+Next: invoke IVF and exact search on the same database and query in the benchmark, compare their returned IDs with explicit tie handling, and record search timings and recall.
+
+### Exact/IVF Benchmark Comparison — October 8, 2026
+
+Completed the user's integration in `benchmark.cpp`: corrected exact timing output to use `time2`, added an exact-results heading, and warmed up both search paths before separately timing them on the same query and database. The final-assignment and complete IVF-build timers remain in their requested order.
+
+The benchmark now prints exact/IVF search speedup and two recall values. ID-overlap recall counts shared IDs divided by the number returned by exact search (`min(K, database size)`). The second value accepts alternative IDs with exactly equal float scores at the exact top-K cutoff, while still requiring all better-scoring neighbors. This is equality under the current float scoring, not higher-precision ground truth. Result scores print nine significant digits so rounding does not hide differences.
+
+Release run: 100,000 random vectors, dimension 3, 10 clusters, K=5, one random query after warm-up:
+
+```text
+Database generation               -> 17.693 ms
+Parallel final cluster assignment -> 0.582 ms
+Complete IVF build                -> 10.474 ms
+IVF search                        -> 0.042 ms
+Exact search                      -> 0.325 ms
+Observed search speedup           -> 7.7381x
+ID-overlap recall@5               -> 20% (1/5)
+Recall@5 allowing cutoff ties     -> 20% (1/5)
+```
+
+Both build variants and whitespace checks passed. End-to-end checks covered a single cluster (100% ID recall), K larger than the dataset with a zero query (7/7 rather than dividing by K=20), zero-query ties across multiple clusters (2/3 ID overlap but 3/3 when accepting equal-score alternatives), and invalid-input exit status 1.
+
+These are one-query measurements, not average recall or latency. IVF currently chooses clusters by Euclidean centroid distance but ranks vectors by cosine similarity; searching one such cluster can miss high-cosine vectors elsewhere. No selection/ranking behavior was changed at this step. Next, measure recall across multiple queries, then review metric consistency and candidate coverage before optimizing further. No 10-million-vector workload was run for this integration.
+
+### User Release Recall Checks — October 8, 2026
+
+Two user-reported `build-release/benchmark` runs, each with 10,000,000 newly generated random 3D vectors, 10 clusters, and K=5:
+
+```text
+Custom query (-1.3, 1.344, 333):
+Database generation               -> 2041.73 ms
+Parallel final cluster assignment -> 42.558 ms
+Complete IVF build                -> 556.299 ms
+IVF search                        -> 1.787 ms
+Exact search                      -> 20.364 ms
+Search speedup                    -> 11.3956x
+ID recall / recall allowing ties  -> 0% / 0%
+IVF scores                        -> 0.961957753 through 0.961644411
+Exact scores                      -> 0.999991477 through 0.999989867
+
+Random query (coordinates not logged):
+Database generation               -> 1931.08 ms
+Parallel final cluster assignment -> 41.16 ms
+Complete IVF build                -> 537.967 ms
+IVF search                        -> 2.799 ms
+Exact search                      -> 20.244 ms
+Search speedup                    -> 7.23258x
+ID recall / recall allowing ties  -> 0% / 0%
+IVF scores                        -> 0.999999821 through 0.999999404
+Exact scores                      -> 1 through 0.999999881
+```
+
+Neither run was independently repeated by the agent. Both prove that the selected single cluster omitted all exact top-five IDs for these queries; even the score-tie adjustment gave no credit. The custom query also shows a substantial cosine-score gap, while the random query's gap is tiny. High cosine scores do not imply correct top-K ID retrieval in a dense 3D dataset.
+
+Current code still uses Euclidean K-means and Euclidean centroid selection with cosine candidate ranking. Cosine depends on direction, while unnormalized Euclidean distance also depends on magnitude, so these stages can favor different vectors. Single-cluster candidate coverage is an additional limitation. Next, agree on a consistent cosine-oriented representation/cluster metric (normalization plus suitable centroid handling) and evaluate multiple-cluster probing with recall over repeated queries. No search algorithm changes were made in response to these logs.
+
 ### Documentation Workflow
 
 After each completed implementation part and benchmark run, update this README with the behavior, validation, input configuration, build mode, measured subsystem, timings, limitations, and exact next step. Keep earlier measurements labeled with their original conditions.
@@ -522,14 +655,14 @@ IVF makes query search much faster by avoiding a full database scan, but the cur
 ```text
 K-means build time is high at large N.
 Buffer merging, centroid division, and inverted-list construction are still serial.
-Controlled Release benchmarks and query recall evaluation remain pending.
+Release timing is recorded; controlled repeatable benchmarks and recall evaluation remain pending.
 Recall has not been measured yet.
 Only one cluster is searched per query.
 ```
 
 # Next Stage
 
-The final assignment pass is parallelized and validated. The next step is a controlled Release benchmark of the current implementation, followed by recall evaluation against exact search.
+The final assignment pass is parallelized and validated, Release timing is recorded, and exact/IVF comparison with single-query recall is integrated and checked. The next step is measuring recall across multiple queries, then reviewing metric consistency and candidate coverage; controlled repeatable timing remains pending.
 
 The same process continues:
 
@@ -542,7 +675,7 @@ Reduce worker-local results in a fixed order [done]
     ↓
 Parallelize the final assignment pass [done]
     ↓
-Run controlled Release benchmarks
+Initial Release benchmark [done]; controlled repeatable timings [pending]
     ↓
 Measure IVF recall against exact search
 ```

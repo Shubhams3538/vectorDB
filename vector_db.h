@@ -33,4 +33,9 @@ vector<pair<string, float>> search(
     int k
 );
 
+vector<pair<string, float>> exact_search(
+    const vector<float>& v,
+    int k
+);
+
 int size();
