@@ -21,7 +21,7 @@ vector<float> generateVector(int dimension);
 
 void generate_random_database(int n, int dim);
 
-void build_ivf(int num_clusters);
+bool build_ivf(int num_clusters);
 
 float find_cosine_similarity(
     const vector<float>& a,
@@ -29,6 +29,11 @@ float find_cosine_similarity(
 );
 
 vector<pair<string, float>> search(
+    const vector<float>& v,
+    int k
+);
+
+vector<pair<string, float>> exact_search(
     const vector<float>& v,
     int k
 );
