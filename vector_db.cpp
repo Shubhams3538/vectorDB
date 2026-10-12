@@ -114,7 +114,10 @@ vector<pair<string, float>> search(
 ) {
     vector<pair<string, float>> ans;
 
-    if (centroids.empty() || inverted_lists.empty()) {
+    // Same input checks as exact_search(): a short query would read past v,
+    // and a negative k would compare as a huge size_t below.
+    if (k <= 0 || dimension <= 0 || v.size() != size_t(dimension) ||
+        centroids.empty() || inverted_lists.empty()) {
         return ans;
     }
 
@@ -150,7 +153,7 @@ vector<pair<string, float>> search(
 
         for (int d = 0; d < dimension; d++) {
             float difference =
-                v[d] - centroids[cluster * dimension + d];
+                v[d] - centroids[size_t(cluster) * dimension + d];
 
             centroid_distance += difference * difference;
         }
@@ -164,7 +167,8 @@ vector<pair<string, float>> search(
     // Search only vectors that belong to the query's closest cluster.
     for (int i : inverted_lists[closest_cluster]) {
 
-        int start = i * dimension;
+        // size_t: i * dimension overflows int past ~715M vectors at dimension 3.
+        size_t start = size_t(i) * dimension;
 
         float numerator = 0.0f;
         float vector_norm = 0.0f;
@@ -187,7 +191,7 @@ vector<pair<string, float>> search(
             val = numerator / deno;
         }
 
-        if (pq.size() < k) {
+        if (pq.size() < size_t(k)) {
             pq.push({val, ids[i]});
         }
         else if (pq.top().first < val) {

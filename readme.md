@@ -631,6 +631,15 @@ The interactive benchmark generates the database and builds IVF once, then repea
 
 Validation: rebuilt the Release benchmark and checked scripted runs with 100 vectors, dimension 3, K=5, and 4 clusters. Random/custom/random queries followed by `quit`, immediate `exit`, an invalid choice followed by `exit`, and end-of-input after a query all passed. Generation and indexing ran once per process. `git diff --check` passed. These small runs verify the interaction; they are not performance measurements. Next, use repeated queries to assess recall and continue the metric-consistency/candidate-coverage review.
 
+### Bug Fixes — October 12–13, 2026
+
+Branch `bug-fixes`, made from `stage6-paralleling` at `00914d4`. These fixes do not change the clustering or search algorithm.
+
+#### October 12, 2026 — `search()` Input Checks and Offset Overflow
+
+- **`search()` input checks.** `search()` now applies the same checks as `exact_search()`: a nonpositive K or a query whose length differs from `dimension` returns an empty result. Before this, a short query read past the end of the query vector, and `k = -1` was converted to a huge `size_t` and returned the whole cluster.
+- **Offset overflow.** Flattened offsets (`index * dimension`) were computed in `int` and overflow past about 715M vectors at dimension 3. They now use `size_t` in `search()` and throughout `kmeans.cpp` (assignment, accumulation, centroid initialization, and division). Each vector's start offset is computed once, before the per-dimension loop.
+
 ### Documentation Workflow
 
 After each completed implementation part and benchmark run, update this README with the behavior, validation, input configuration, build mode, measured subsystem, timings, limitations, and exact next step. Keep earlier measurements labeled with their original conditions.
