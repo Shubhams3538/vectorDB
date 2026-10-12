@@ -625,6 +625,12 @@ Neither run was independently repeated by the agent. Both prove that the selecte
 
 Current code still uses Euclidean K-means and Euclidean centroid selection with cosine candidate ranking. Cosine depends on direction, while unnormalized Euclidean distance also depends on magnitude, so these stages can favor different vectors. Single-cluster candidate coverage is an additional limitation. Next, agree on a consistent cosine-oriented representation/cluster metric (normalization plus suitable centroid handling) and evaluate multiple-cluster probing with recall over repeated queries. No search algorithm changes were made in response to these logs.
 
+### Repeated Benchmark Queries — October 9, 2026
+
+The interactive benchmark generates the database and builds IVF once, then repeats the custom/random query menu. Choose `1` for a custom vector or `2` for a fresh random vector; type `exit` or `quit` at the menu to stop. Each query retains the warm-up, IVF/exact timing, recall calculation, and result output. Invalid menu choices retry, and end-of-input exits the menu cleanly. Search and clustering algorithms are unchanged.
+
+Validation: rebuilt the Release benchmark and checked scripted runs with 100 vectors, dimension 3, K=5, and 4 clusters. Random/custom/random queries followed by `quit`, immediate `exit`, an invalid choice followed by `exit`, and end-of-input after a query all passed. Generation and indexing ran once per process. `git diff --check` passed. These small runs verify the interaction; they are not performance measurements. Next, use repeated queries to assess recall and continue the metric-consistency/candidate-coverage review.
+
 ### Documentation Workflow
 
 After each completed implementation part and benchmark run, update this README with the behavior, validation, input configuration, build mode, measured subsystem, timings, limitations, and exact next step. Keep earlier measurements labeled with their original conditions.

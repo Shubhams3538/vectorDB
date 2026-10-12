@@ -2,6 +2,7 @@
 #include <chrono>
 #include <iostream>
 #include <random>
+#include <string>
 
 using namespace std;
 
@@ -56,113 +57,119 @@ int main() {
     time = chrono::duration<double, milli>(end - start).count();
     cout << "Time taken to create Inverted File System : " << time << " ms\n";
 
-    cout<<"1. Choose custom vector"<<endl;
-    cout<<"2. Generate random vector"<<endl;
-    int opt;
-    if (!(cin >> opt) || (opt != 1 && opt != 2)) {
-        cerr << "Please choose either 1 or 2.\n";
-        return 1;
-    }
-    vector<float> query;
+    while (true) {
+        cout << "\n1. Choose custom vector\n";
+        cout << "2. Generate random vector\n";
+        cout << "Type exit or quit to stop.\n";
+        string opt;
+        if (!(cin >> opt) || opt == "exit" || opt == "quit") {
+            break;
+        }
+        if (opt != "1" && opt != "2") {
+            cerr << "Please choose 1 or 2, or type exit or quit.\n";
+            continue;
+        }
+        vector<float> query;
 
-    if(opt == 1){
-        cout << "Input " << dim
-             << " vector values, separated by spaces or newlines: " << endl;
-        query.resize(dim);
+        if(opt == "1"){
+            cout << "Input " << dim
+                 << " vector values, separated by spaces or newlines: " << endl;
+            query.resize(dim);
 
-        for (int i = 0; i < dim; i++) {
-            if (!(cin >> query[i])) {
-                cerr << "Expected " << dim << " numeric vector values.\n";
-                return 1;
+            for (int i = 0; i < dim; i++) {
+                if (!(cin >> query[i])) {
+                    cerr << "Expected " << dim << " numeric vector values.\n";
+                    return 1;
+                }
             }
         }
-    }
-    else{
-       query = generateVector(dim);
-    }
-
-    // Warm up both paths before timing the same query.
-    search(query, k);
-    exact_search(query, k);
-
-    start = chrono::high_resolution_clock::now();
-
-    auto result = search(query, k);
-
-    end = chrono::high_resolution_clock::now();
-
-    time = chrono::duration<double, milli>(end - start).count();
-
-
-    start = chrono::high_resolution_clock::now();
-
-    auto result2 = exact_search(query, k);
-
-    end = chrono::high_resolution_clock::now();
-
-    double time2 = chrono::duration<double, milli>(end - start).count();
-
-    cout << "Vectors: " << n << endl;
-    cout << "Dimension: " << dim << endl;
-    cout << "K: " << k << endl;
-    cout << "Search time using IVF & Clustering: " << time << " ms\n";
-    cout << "Exact search time: " << time2 << " ms\n";
-    if (time > 0.0) {
-        cout << "Search speedup (exact / IVF): " << time2 / time << "x\n";
-    }
-
-    unordered_set<string> exact_ids;
-    for (const auto& x : result2) {
-        exact_ids.insert(x.first);
-    }
-    int shared_ids = 0;
-    for (const auto& x : result) {
-        if (exact_ids.count(x.first)) {
-            shared_ids++;
+        else{
+           query = generateVector(dim);
         }
-    }
 
-    // When K exceeds the database size, use the number of available neighbors.
-    if (!result2.empty()) {
-        cout << "Recall@" << k << " (ID overlap): "
-             << 100.0 * shared_ids / result2.size() << "% ("
-             << shared_ids << '/' << result2.size() << ")\n";
+        // Warm up both paths before timing the same query.
+        search(query, k);
+        exact_search(query, k);
 
-        // Equal scores at the exact top-K boundary can select different valid IDs.
-        float cutoff = result2.back().second;
-        int required_above_cutoff = 0;
-        int found_above_cutoff = 0;
-        int found_at_cutoff = 0;
+        start = chrono::high_resolution_clock::now();
+
+        auto result = search(query, k);
+
+        end = chrono::high_resolution_clock::now();
+
+        time = chrono::duration<double, milli>(end - start).count();
+
+
+        start = chrono::high_resolution_clock::now();
+
+        auto result2 = exact_search(query, k);
+
+        end = chrono::high_resolution_clock::now();
+
+        double time2 = chrono::duration<double, milli>(end - start).count();
+
+        cout << "Vectors: " << n << endl;
+        cout << "Dimension: " << dim << endl;
+        cout << "K: " << k << endl;
+        cout << "Search time using IVF & Clustering: " << time << " ms\n";
+        cout << "Exact search time: " << time2 << " ms\n";
+        if (time > 0.0) {
+            cout << "Search speedup (exact / IVF): " << time2 / time << "x\n";
+        }
+
+        unordered_set<string> exact_ids;
         for (const auto& x : result2) {
-            if (x.second > cutoff) {
-                required_above_cutoff++;
-            }
+            exact_ids.insert(x.first);
         }
+        int shared_ids = 0;
         for (const auto& x : result) {
-            if (x.second > cutoff && exact_ids.count(x.first)) {
-                found_above_cutoff++;
-            }
-            else if (x.second == cutoff) {
-                found_at_cutoff++;
+            if (exact_ids.count(x.first)) {
+                shared_ids++;
             }
         }
-        int boundary_slots = int(result2.size()) - required_above_cutoff;
-        int credited = found_above_cutoff + min(found_at_cutoff, boundary_slots);
-        cout << "Recall@" << k << " (allowing equal-score boundary ties): "
-             << 100.0 * credited / result2.size() << "% ("
-             << credited << '/' << result2.size() << ")\n";
-    }
 
-    cout << setprecision(9);
-    cout << "Vectors given by IVF: " << endl;
-    for (auto& x : result) {
-        cout << x.first << " " << x.second << "\n";
-    }
-    // printing the result by exact search
-    cout << "\nVectors given by exact search: " << endl;
+        // When K exceeds the database size, use the number of available neighbors.
+        if (!result2.empty()) {
+            cout << "Recall@" << k << " (ID overlap): "
+                 << 100.0 * shared_ids / result2.size() << "% ("
+                 << shared_ids << '/' << result2.size() << ")\n";
 
-    for (auto& x : result2) {
-        cout << x.first << " " << x.second << "\n";
+            // Equal scores at the exact top-K boundary can select different valid IDs.
+            float cutoff = result2.back().second;
+            int required_above_cutoff = 0;
+            int found_above_cutoff = 0;
+            int found_at_cutoff = 0;
+            for (const auto& x : result2) {
+                if (x.second > cutoff) {
+                    required_above_cutoff++;
+                }
+            }
+            for (const auto& x : result) {
+                if (x.second > cutoff && exact_ids.count(x.first)) {
+                    found_above_cutoff++;
+                }
+                else if (x.second == cutoff) {
+                    found_at_cutoff++;
+                }
+            }
+            int boundary_slots = int(result2.size()) - required_above_cutoff;
+            int credited = found_above_cutoff + min(found_at_cutoff, boundary_slots);
+            cout << "Recall@" << k << " (allowing equal-score boundary ties): "
+                 << 100.0 * credited / result2.size() << "% ("
+                 << credited << '/' << result2.size() << ")\n";
+        }
+
+        cout << setprecision(9);
+        cout << "Vectors given by IVF: " << endl;
+        for (auto& x : result) {
+            cout << x.first << " " << x.second << "\n";
+        }
+        // printing the result by exact search
+        cout << "\nVectors given by exact search: " << endl;
+
+        for (auto& x : result2) {
+            cout << x.first << " " << x.second << "\n";
+        }
     }
 
     return 0;
