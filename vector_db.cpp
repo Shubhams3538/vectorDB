@@ -8,13 +8,14 @@ vector<float>centroids;
 vector<vector<int>>inverted_lists;
 
 int dimension = 0;
-int num_vectors = 0;
 
 // function to generate vector of some dimension
 vector<float> generateVector(int dimension) {
     static random_device rd;
     static mt19937 gen(rd());
-    static uniform_real_distribution<float> dis(0.0f, 1.0f);
+    // [-1, 1) so vectors point in every direction; [0, 1) kept them all in one
+    // octant, which made every cosine score close to 1.
+    static uniform_real_distribution<float> dis(-1.0f, 1.0f);
 
     vector<float> v(dimension);
 
@@ -54,7 +55,6 @@ void insert(const string& id, const vector<float>& v) {
 void generate_random_database(int n, int dim) {
 
     dimension = dim;
-    num_vectors = n;
 
     id_to_index.reserve(n);
     ids.reserve(n);
@@ -69,9 +69,10 @@ void generate_random_database(int n, int dim) {
 }
 
 bool build_ivf(int num_clusters){
+    // Count what is actually stored, so vectors added through insert() are indexed too.
     return kmeans(
         embeddings,
-        num_vectors,
+        int(ids.size()),
         dimension,
         num_clusters,
         centroids,
