@@ -8,13 +8,14 @@ vector<float>centroids;
 vector<vector<int>>inverted_lists;
 
 int dimension = 0;
-int num_vectors = 0;
 
 // function to generate vector of some dimension
 vector<float> generateVector(int dimension) {
     static random_device rd;
     static mt19937 gen(rd());
-    static uniform_real_distribution<float> dis(0.0f, 1.0f);
+    // [-1, 1) so vectors point in every direction; [0, 1) kept them all in one
+    // octant, which made every cosine score close to 1.
+    static uniform_real_distribution<float> dis(-1.0f, 1.0f);
 
     vector<float> v(dimension);
 
@@ -54,7 +55,6 @@ void insert(const string& id, const vector<float>& v) {
 void generate_random_database(int n, int dim) {
 
     dimension = dim;
-    num_vectors = n;
 
     id_to_index.reserve(n);
     ids.reserve(n);
@@ -69,9 +69,10 @@ void generate_random_database(int n, int dim) {
 }
 
 bool build_ivf(int num_clusters){
+    // Count what is actually stored, so vectors added through insert() are indexed too.
     return kmeans(
         embeddings,
-        num_vectors,
+        int(ids.size()),
         dimension,
         num_clusters,
         centroids,
@@ -114,7 +115,10 @@ vector<pair<string, float>> search(
 ) {
     vector<pair<string, float>> ans;
 
-    if (centroids.empty() || inverted_lists.empty()) {
+    // Same input checks as exact_search(): a short query would read past v,
+    // and a negative k would compare as a huge size_t below.
+    if (k <= 0 || dimension <= 0 || v.size() != size_t(dimension) ||
+        centroids.empty() || inverted_lists.empty()) {
         return ans;
     }
 
@@ -150,7 +154,7 @@ vector<pair<string, float>> search(
 
         for (int d = 0; d < dimension; d++) {
             float difference =
-                v[d] - centroids[cluster * dimension + d];
+                v[d] - centroids[size_t(cluster) * dimension + d];
 
             centroid_distance += difference * difference;
         }
@@ -164,7 +168,8 @@ vector<pair<string, float>> search(
     // Search only vectors that belong to the query's closest cluster.
     for (int i : inverted_lists[closest_cluster]) {
 
-        int start = i * dimension;
+        // size_t: i * dimension overflows int past ~715M vectors at dimension 3.
+        size_t start = size_t(i) * dimension;
 
         float numerator = 0.0f;
         float vector_norm = 0.0f;
@@ -187,7 +192,7 @@ vector<pair<string, float>> search(
             val = numerator / deno;
         }
 
-        if (pq.size() < k) {
+        if (pq.size() < size_t(k)) {
             pq.push({val, ids[i]});
         }
         else if (pq.top().first < val) {

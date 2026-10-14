@@ -30,10 +30,14 @@ void multi_threaded_centroid_accumulation(
                 int clusterno = assignments[vector_ind];
                 thread_count[t][clusterno]++;
 
+                // size_t offsets: int products overflow at large vector counts.
+                size_t vector_start = size_t(vector_ind) * dimensions;
+                size_t cluster_start = size_t(clusterno) * dimensions;
+
                 // Add this vector to the sum for its assigned cluster.
                 for (int d = 0; d < dimensions; d++) {
-                    thread_sums[t][clusterno * dimensions + d] +=
-                        embeddings[vector_ind * dimensions + d];
+                    thread_sums[t][cluster_start + d] +=
+                        embeddings[vector_start + d];
                 }
             }
         });
@@ -78,12 +82,14 @@ void multi_threaded_cluster_assignment(int num_vectors, int dimensions, const ve
         threads.emplace_back([start, end, dimensions, &embeddings, &centroids, num_clusters, &assignments](){
 
             for(int vector_ind = start;vector_ind < end;vector_ind++){
+            // size_t offset: int product overflows at large vector counts.
+            size_t vector_start = size_t(vector_ind) * dimensions;
             int closest_cluster = 0;
             // findig minimum distance
             float closest_dist = 0.0f;
             // to figure out the eucladian distance between the 0th cluster and current vector
             for(int d = 0;d < dimensions;d++){
-                float diff = embeddings[vector_ind * dimensions + d] - centroids[d];
+                float diff = embeddings[vector_start + d] - centroids[d];
                 closest_dist += diff * diff;
             }
 
@@ -92,7 +98,7 @@ void multi_threaded_cluster_assignment(int num_vectors, int dimensions, const ve
             for(int cluster = 1; cluster < num_clusters;cluster++){
                 float temp_dist = 0;
                 for(int d = 0;d<dimensions;d++){
-                    float diff = embeddings[vector_ind * dimensions + d] - centroids[cluster * dimensions + d];
+                    float diff = embeddings[vector_start + d] - centroids[size_t(cluster) * dimensions + d];
                     temp_dist += diff * diff;
                 }
                 if(temp_dist < closest_dist){
@@ -120,13 +126,13 @@ int num_vectors,int dimensions , int num_clusters, vector<float>&centroids,  vec
         cerr << "Invalid K-means input.\n";
         return false;
     }
-    centroids.assign(num_clusters * dimensions, 0.0f);
+    centroids.assign(size_t(num_clusters) * dimensions, 0.0f);
     inverted_list.assign(num_clusters, {});
 
     for(int cluster = 0;cluster<num_clusters;cluster++){
         for(int dimension = 0;dimension<dimensions;dimension++){
-            centroids[cluster * dimensions + dimension] =
-                embeddings[cluster * dimensions + dimension];
+            centroids[size_t(cluster) * dimensions + dimension] =
+                embeddings[size_t(cluster) * dimensions + dimension];
         }
     }
 
@@ -137,7 +143,7 @@ int num_vectors,int dimensions , int num_clusters, vector<float>&centroids,  vec
         multi_threaded_cluster_assignment(
             num_vectors, dimensions, embeddings, centroids, assignments, num_clusters);
 
-        vector<double> sums(num_clusters * dimensions, 0.0);
+        vector<double> sums(size_t(num_clusters) * dimensions, 0.0);
         vector<int> noofvectorsincluster(num_clusters, 0);
         multi_threaded_centroid_accumulation(
             num_vectors, dimensions, embeddings, assignments, sums, noofvectorsincluster);
@@ -154,8 +160,8 @@ int num_vectors,int dimensions , int num_clusters, vector<float>&centroids,  vec
             if(noofvectorsincluster[cluster] == 0) continue;
 
             for(int d = 0;d<dimensions;d++){
-                centroids[cluster * dimensions + d] = static_cast<float>(
-                    sums[cluster * dimensions + d] / noofvectorsincluster[cluster]);
+                centroids[size_t(cluster) * dimensions + d] = static_cast<float>(
+                    sums[size_t(cluster) * dimensions + d] / noofvectorsincluster[cluster]);
             }
         }
     }

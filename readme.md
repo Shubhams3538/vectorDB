@@ -631,6 +631,44 @@ The interactive benchmark generates the database and builds IVF once, then repea
 
 Validation: rebuilt the Release benchmark and checked scripted runs with 100 vectors, dimension 3, K=5, and 4 clusters. Random/custom/random queries followed by `quit`, immediate `exit`, an invalid choice followed by `exit`, and end-of-input after a query all passed. Generation and indexing ran once per process. `git diff --check` passed. These small runs verify the interaction; they are not performance measurements. Next, use repeated queries to assess recall and continue the metric-consistency/candidate-coverage review.
 
+### Bug Fixes — October 12–13, 2026
+
+Branch `bug-fixes`, made from `stage6-paralleling` at `00914d4`. These fixes do not change the clustering or search algorithm.
+
+#### October 12, 2026 — `search()` Input Checks and Offset Overflow
+
+- **`search()` input checks.** `search()` now applies the same checks as `exact_search()`: a nonpositive K or a query whose length differs from `dimension` returns an empty result. Before this, a short query read past the end of the query vector, and `k = -1` was converted to a huge `size_t` and returned the whole cluster.
+- **Offset overflow.** Flattened offsets (`index * dimension`) were computed in `int` and overflow past about 715M vectors at dimension 3. They now use `size_t` in `search()` and throughout `kmeans.cpp` (assignment, accumulation, centroid initialization, and division). Each vector's start offset is computed once, before the per-dimension loop.
+
+#### October 13, 2026 — Test Data Range and IVF Build After `insert()`
+
+- **Test data range.** `generateVector` now draws coordinates from `[-1, 1)` instead of `[0, 1)`. Every earlier vector sat in the positive octant, so all stored vectors pointed in roughly the same direction, and recall on that data mostly measured float rounding rather than cluster quality.
+- **IVF build after `insert()`.** The global `num_vectors` was set only by `generate_random_database`, so `build_ivf` failed (or indexed nothing) for vectors added through `insert()`. The global was removed, and `build_ivf` now passes `ids.size()`.
+
+Validation of all four fixes together (temporary harness, not committed):
+
+- Debug and Release builds succeeded with no warnings; `git diff --check` passed.
+- On identical deterministic `[-1, 1)` data (10, 10,003 and 200,000 vectors, dimension 3, 10 clusters), the new code produced byte-identical centroids, inverted lists, and results for 50 queries compared with `00914d4`. The offset changes therefore did not change any computed value.
+- Building from `insert()` alone succeeded, and every vector appeared in exactly one inverted list.
+- `search()` returned empty results for a short query, a long query, K=0, and K=-1.
+- 300,000 generated coordinates all fell in `[-1, 1)`, about half of them negative.
+- Benchmark menu: an invalid choice followed by `exit`, and end-of-input after a query, both exited with status 0.
+
+The overflow fix was not exercised at a scale where `int` actually overflows; that needs several GB of embeddings.
+
+Release run with the new data distribution: 1,000,000 random vectors, dimension 3, 10 clusters, K=5, 20 random queries in one process:
+
+```text
+Database generation               -> 113.277 ms
+Parallel final cluster assignment -> 5.302 ms
+Complete IVF build                -> 59.098 ms
+IVF search                        -> 0.136 - 0.221 ms
+Exact search                      -> 1.746 - 1.898 ms
+Recall@5 (ID overlap)             -> 89/100 IDs over 20 queries (89%); per query 1/5 to 5/5, 14 of 20 at 5/5
+```
+
+With data centered on the origin, the Euclidean clusters are roughly cone-shaped around the origin, so they line up much better with cosine ranking than the positive-octant data did. Earlier 0% recall results came from the old data and are not comparable with this run. Single-cluster search still misses neighbors near cluster boundaries (one query reached only 1/5). This is one 20-query run; the next step is unchanged: metric consistency (normalized vectors, spherical K-means) and multi-cluster probing, with recall averaged over many queries.
+
 ### Documentation Workflow
 
 After each completed implementation part and benchmark run, update this README with the behavior, validation, input configuration, build mode, measured subsystem, timings, limitations, and exact next step. Keep earlier measurements labeled with their original conditions.
